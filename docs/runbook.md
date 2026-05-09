@@ -64,10 +64,16 @@ Note: `scripts/evaluate.py` computes ECE in streaming mode (no per-voxel list ac
 ## Step 4: XAI and uncertainty
 
 Run XAI:
-- `python scripts/run_xai.py --checkpoint checkpoints/best_model.pt --case-dir data/processed/BraTS2023/<CASE_ID> --out-dir results/figures`
+- `python scripts/run_xai.py --checkpoint checkpoints/best_model.pt --case-dir data/processed/BraTS2023/<CASE_ID> --out-dir results/figures --quiet-warnings`
+
+If you hit memory limits, bound XAI volume size:
+- `python scripts/run_xai.py --checkpoint checkpoints/best_model.pt --case-dir data/processed/BraTS2023/<CASE_ID> --out-dir results/figures --spatial-size 96 --quiet-warnings`
 
 Run uncertainty:
-- `python scripts/uncertainty.py --checkpoint checkpoints/best_model.pt --case-dir data/processed/BraTS2023/<CASE_ID> --out results/figures/uncertainty_case_<CASE_ID>.png`
+- `python scripts/uncertainty.py --checkpoint checkpoints/best_model.pt --case-dir data/processed/BraTS2023/<CASE_ID> --out results/figures/uncertainty_case_<CASE_ID>.png --quiet-warnings`
+
+If you hit memory limits, use sliding-window controls:
+- `python scripts/uncertainty.py --checkpoint checkpoints/best_model.pt --case-dir data/processed/BraTS2023/<CASE_ID> --passes 10 --spatial-size 96 --overlap 0.25 --out results/figures/uncertainty_case_<CASE_ID>.png --quiet-warnings`
 
 ## Step 5: Generative extension
 

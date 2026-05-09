@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import os
+import warnings
 from pathlib import Path
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+warnings.filterwarnings("ignore", message="Protobuf gencode version", category=UserWarning)
 
 import torch
 from monai.transforms import Compose, DivisiblePadd, EnsureChannelFirstd, EnsureTyped, LoadImaged, NormalizeIntensityd
@@ -26,6 +31,7 @@ def parse_args():
     p.add_argument("--out-dir", type=str, default="results")
     p.add_argument("--skip-shap", action="store_true")
     p.add_argument("--shap-nsamples", type=int, default=100)
+    p.add_argument("--quiet-warnings", action="store_true")
     return p.parse_args()
 
 
@@ -65,6 +71,9 @@ def pick_target_layer(model: torch.nn.Module):
 
 def main():
     args = parse_args()
+    if args.quiet_warnings:
+        warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.filterwarnings("ignore", category=FutureWarning)
     device = torch.device(args.device)
 
     ckpt = torch.load(args.checkpoint, map_location=device)

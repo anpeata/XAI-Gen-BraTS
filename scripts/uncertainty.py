@@ -1,7 +1,12 @@
 from __future__ import annotations
 
 import argparse
+import os
+import warnings
 from pathlib import Path
+
+os.environ.setdefault("TF_CPP_MIN_LOG_LEVEL", "2")
+warnings.filterwarnings("ignore", message="Protobuf gencode version", category=UserWarning)
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -28,6 +33,7 @@ def parse_args():
     p.add_argument("--overlap", type=float, default=0.25)
     p.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--out", type=str, default="results/uncertainty/uncertainty_map.png")
+    p.add_argument("--quiet-warnings", action="store_true")
     return p.parse_args()
 
 
@@ -56,6 +62,9 @@ def load_case(case_dir: Path):
 
 def main():
     args = parse_args()
+    if args.quiet_warnings:
+        warnings.filterwarnings("ignore", category=UserWarning)
+        warnings.filterwarnings("ignore", category=FutureWarning)
     device = torch.device(args.device)
 
     ckpt = torch.load(args.checkpoint, map_location=device)

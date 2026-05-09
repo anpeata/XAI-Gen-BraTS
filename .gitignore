@@ -28,6 +28,11 @@ results/uncertainty/
 results/uncertainty/*
 !results/uncertainty/smoke_v2/
 !results/uncertainty/smoke_v2/*.png
+results/xai/
+!results/xai/
+results/xai/*
+!results/xai/smoke_v2/
+!results/xai/smoke_v2/**
 results/validation/
 
 # IDE
