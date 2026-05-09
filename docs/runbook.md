@@ -59,6 +59,8 @@ Run:
 Then evaluate:
 - `python scripts/evaluate.py --data-dir data/processed/BraTS2023 --checkpoint checkpoints/best_model.pt --out results/metrics/baseline_metrics.json --quiet-warnings`
 
+Note: `scripts/evaluate.py` computes ECE in streaming mode (no per-voxel list accumulation), so large volumes won't OOM RAM.
+
 ## Step 4: XAI and uncertainty
 
 Run XAI:

@@ -4,7 +4,6 @@ from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
-import shap
 import torch
 
 
@@ -30,6 +29,11 @@ def run_modality_shap(
     out_file: str = "results/shap_modalities.png",
     nsamples: int = 100,
 ):
+    try:
+        import shap  # type: ignore
+    except ImportError as exc:
+        raise RuntimeError("SHAP is not installed. Install requirements.txt to enable modality attribution.") from exc
+
     model.eval()
     background = np.ones((16, 4), dtype=np.float32)
     samples = np.asarray(

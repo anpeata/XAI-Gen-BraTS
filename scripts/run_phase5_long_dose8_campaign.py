@@ -81,7 +81,14 @@ def run_step(
     skip_existing: bool,
     dry_run: bool,
 ) -> None:
-    if skip_existing and expected_outputs and all(p.exists() for p in expected_outputs):
+    def _is_ready_output(path: Path) -> bool:
+        if not path.exists():
+            return False
+        if path.is_dir():
+            return any(path.iterdir())
+        return True
+
+    if skip_existing and expected_outputs and all(_is_ready_output(p) for p in expected_outputs):
         outputs = ", ".join(str(p) for p in expected_outputs)
         print(f"[SKIP] {name} (outputs already exist: {outputs})")
         return

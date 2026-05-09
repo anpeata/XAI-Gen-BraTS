@@ -91,7 +91,7 @@ def extract_zips(root: Path) -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
         print(f"Extracting {zip_path} -> {out_dir}")
         with zipfile.ZipFile(zip_path, "r") as zf:
-            zf.extractall(out_dir)
+            _safe_extract_zip(zf, out_dir)
 
 
 def extract_tars(root: Path) -> None:
@@ -108,7 +108,35 @@ def extract_tars(root: Path) -> None:
         out_dir.mkdir(parents=True, exist_ok=True)
         print(f"Extracting {tar_path} -> {out_dir}")
         with tarfile.open(tar_path, "r:gz") as tf:
-            tf.extractall(out_dir)
+            _safe_extract_tar(tf, out_dir)
+
+
+def _is_within_directory(root: Path, target: Path) -> bool:
+    root_resolved = root.resolve(strict=False)
+    target_resolved = target.resolve(strict=False)
+    try:
+        target_resolved.relative_to(root_resolved)
+        return True
+    except ValueError:
+        return False
+
+
+def _safe_extract_zip(zf: zipfile.ZipFile, out_dir: Path) -> None:
+    out_dir_resolved = out_dir.resolve(strict=False)
+    for info in zf.infolist():
+        dest = out_dir / info.filename
+        if not _is_within_directory(out_dir_resolved, dest):
+            raise RuntimeError(f"Unsafe path in zip archive: {info.filename}")
+    zf.extractall(out_dir)
+
+
+def _safe_extract_tar(tf: tarfile.TarFile, out_dir: Path) -> None:
+    out_dir_resolved = out_dir.resolve(strict=False)
+    for member in tf.getmembers():
+        dest = out_dir / member.name
+        if not _is_within_directory(out_dir_resolved, dest):
+            raise RuntimeError(f"Unsafe path in tar archive: {member.name}")
+    tf.extractall(out_dir)
 
 
 def filter_cases_by_prefix(

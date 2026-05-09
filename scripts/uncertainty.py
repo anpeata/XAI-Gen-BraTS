@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from monai.inferers import sliding_window_inference
 from monai.transforms import Compose, DivisiblePadd, EnsureChannelFirstd, EnsureTyped, LoadImaged, NormalizeIntensityd
 
 from models.segmentation import create_segmentation_model
@@ -22,6 +23,9 @@ def parse_args():
     p.add_argument("--checkpoint", type=str, default="checkpoints/best_model.pt")
     p.add_argument("--case-dir", type=str, required=True)
     p.add_argument("--passes", type=int, default=20)
+    p.add_argument("--spatial-size", type=int, default=128)
+    p.add_argument("--sw-batch-size", type=int, default=1)
+    p.add_argument("--overlap", type=float, default=0.25)
     p.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--out", type=str, default="results/uncertainty/uncertainty_map.png")
     return p.parse_args()
@@ -61,25 +65,46 @@ def main():
     enable_dropout(model)
 
     x = load_case(Path(args.case_dir)).to(device)
-    probs = []
+    roi_size = (args.spatial_size, args.spatial_size, args.spatial_size)
+    sum_p = None
+    sum_p2 = None
     with torch.no_grad():
         for _ in range(args.passes):
-            p = torch.softmax(model(x), dim=1)
-            probs.append(p)
+            logits = sliding_window_inference(
+                x,
+                roi_size=roi_size,
+                sw_batch_size=args.sw_batch_size,
+                predictor=model,
+                overlap=args.overlap,
+            )
+            p = torch.softmax(logits, dim=1)
+            if sum_p is None:
+                sum_p = torch.zeros_like(p)
+                sum_p2 = torch.zeros_like(p)
+            sum_p += p
+            sum_p2 += p * p
 
-    stack = torch.stack(probs, dim=0)
-    uncertainty = stack.var(dim=0).mean(dim=1).squeeze().cpu().numpy()
+    n = max(1, int(args.passes))
+    mean_p = sum_p / n
+    mean_p2 = sum_p2 / n
+    var = mean_p2 - mean_p * mean_p
+    if n > 1:
+        var = var * (n / (n - 1))
+    var = torch.clamp(var, min=0.0)
+    uncertainty = var.mean(dim=1).squeeze().cpu().numpy()
     flair = x[0, 3].detach().cpu().numpy()
-    z = flair.shape[0] // 2
+    z = flair.shape[2] // 2
+    flair_slice = flair[:, :, z]
+    unc_slice = uncertainty[:, :, z]
 
     Path(args.out).parent.mkdir(parents=True, exist_ok=True)
     plt.figure(figsize=(10, 4))
     plt.subplot(1, 2, 1)
-    plt.imshow(flair[z], cmap="gray")
+    plt.imshow(flair_slice, cmap="gray")
     plt.title("FLAIR slice")
     plt.axis("off")
     plt.subplot(1, 2, 2)
-    plt.imshow(uncertainty[z], cmap="inferno")
+    plt.imshow(unc_slice, cmap="inferno")
     plt.title("MC Dropout Uncertainty")
     plt.axis("off")
     plt.tight_layout()

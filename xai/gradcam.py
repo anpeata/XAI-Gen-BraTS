@@ -63,9 +63,11 @@ def run_gradcam(
     vol_np = volume.detach().squeeze().cpu().numpy()
     # Use FLAIR channel for visualization by default.
     flair = vol_np[3] if vol_np.ndim == 4 and vol_np.shape[0] >= 4 else vol_np[0]
-    z = flair.shape[0] // 2
-
-    _overlay(flair[z], cam_np[z])
+    if flair.ndim == 3 and cam_np.ndim == 3:
+        z = flair.shape[2] // 2
+        _overlay(flair[:, :, z], cam_np[:, :, z])
+    else:
+        _overlay(flair, cam_np)
     out_path = Path(out_file)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     plt.tight_layout()

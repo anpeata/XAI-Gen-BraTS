@@ -79,18 +79,56 @@ def parse_args():
     return p.parse_args()
 
 
-def expected_calibration_error(confidences: np.ndarray, correctness: np.ndarray, n_bins: int = 15) -> float:
-    bins = np.linspace(0.0, 1.0, n_bins + 1)
-    ece = 0.0
-    total = len(confidences)
-    for i in range(n_bins):
-        mask = (confidences > bins[i]) & (confidences <= bins[i + 1])
-        if not np.any(mask):
-            continue
-        acc = correctness[mask].mean()
-        conf = confidences[mask].mean()
-        ece += (mask.sum() / total) * abs(acc - conf)
-    return float(ece)
+class ECEAccumulator:
+    """Streaming Expected Calibration Error (ECE) accumulator.
+
+    Avoids holding all voxel-level confidences/correctness in memory.
+    Binning matches the previous implementation: (bin_low, bin_high].
+    """
+
+    def __init__(self, n_bins: int = 15):
+        self.n_bins = int(n_bins)
+        self.bin_edges = torch.linspace(0.0, 1.0, self.n_bins + 1)
+        self.counts = torch.zeros(self.n_bins, dtype=torch.long)
+        self.sum_conf = torch.zeros(self.n_bins, dtype=torch.float64)
+        self.sum_correct = torch.zeros(self.n_bins, dtype=torch.float64)
+        self.total = 0
+
+    def update(self, confidences: torch.Tensor, correctness: torch.Tensor) -> None:
+        conf = confidences.reshape(-1)
+        corr = correctness.reshape(-1).to(conf.dtype)
+
+        edges = self.bin_edges.to(device=conf.device, dtype=conf.dtype)
+        # Bin rule: (edge[i], edge[i+1]] implemented via searchsorted(edge, x, side="left") - 1.
+        bin_idx = torch.searchsorted(edges, conf, right=False) - 1
+        mask = (bin_idx >= 0) & (bin_idx < self.n_bins)
+        if not bool(mask.any()):
+            return
+
+        bin_idx = bin_idx[mask]
+        conf = conf[mask].to(torch.float64)
+        corr = corr[mask].to(torch.float64)
+
+        counts = torch.bincount(bin_idx, minlength=self.n_bins)
+        sum_conf = torch.bincount(bin_idx, weights=conf, minlength=self.n_bins)
+        sum_correct = torch.bincount(bin_idx, weights=corr, minlength=self.n_bins)
+
+        self.counts += counts.cpu()
+        self.sum_conf += sum_conf.cpu()
+        self.sum_correct += sum_correct.cpu()
+        self.total += int(bin_idx.numel())
+
+    def compute(self) -> float:
+        if self.total <= 0:
+            return 0.0
+        counts = self.counts.to(torch.float64)
+        mask = counts > 0
+        if not bool(mask.any()):
+            return 0.0
+        acc = self.sum_correct[mask] / counts[mask]
+        conf = self.sum_conf[mask] / counts[mask]
+        ece = torch.sum((counts[mask] / float(self.total)) * (acc - conf).abs()).item()
+        return float(ece)
 
 
 def main():
@@ -132,8 +170,7 @@ def main():
     label_dice_metric_classwise = DiceMetric(include_background=False, reduction="mean_batch")
     label_hd95_metric_classwise = HausdorffDistanceMetric(include_background=False, percentile=95, reduction="mean_batch")
 
-    confidence_values = []
-    correctness_values = []
+    ece_acc = ECEAccumulator(n_bins=15)
 
     with torch.no_grad():
         for batch_idx, batch in enumerate(val_loader, start=1):
@@ -171,8 +208,7 @@ def main():
             conf, voxel_pred_cls = torch.max(probs, dim=1)
             true_cls = labels[:, 0, ...].clamp(0, logits.shape[1] - 1)
             correct = (voxel_pred_cls == true_cls).float()
-            confidence_values.extend(conf.cpu().numpy().ravel().tolist())
-            correctness_values.extend(correct.cpu().numpy().ravel().tolist())
+            ece_acc.update(conf, correct)
 
             if args.max_val_batches > 0 and batch_idx >= args.max_val_batches:
                 break
@@ -201,11 +237,7 @@ def main():
         "label_hd95_classwise": {
             cls: float(val) for cls, val in zip(LABEL_CLASS_NAMES, label_hd95_classwise_values)
         },
-        "ece": expected_calibration_error(
-            np.asarray(confidence_values, dtype=np.float32),
-            np.asarray(correctness_values, dtype=np.float32),
-            n_bins=15,
-        ),
+        "ece": ece_acc.compute(),
         "seed": args.seed,
         "split_seed": split_seed,
         "val_ratio": args.val_ratio,

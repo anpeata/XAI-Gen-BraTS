@@ -5,6 +5,7 @@ from pathlib import Path
 
 import torch
 from monai.transforms import Compose, DivisiblePadd, EnsureChannelFirstd, EnsureTyped, LoadImaged, NormalizeIntensityd
+from monai.transforms import ResizeWithPadOrCropd
 
 from models.segmentation import create_segmentation_model
 from xai.gradcam import run_gradcam
@@ -15,6 +16,12 @@ def parse_args():
     p = argparse.ArgumentParser(description="Run Grad-CAM and modality-level SHAP analysis.")
     p.add_argument("--checkpoint", type=str, default="checkpoints/best_model.pt")
     p.add_argument("--case-dir", type=str, required=True)
+    p.add_argument(
+        "--spatial-size",
+        type=int,
+        default=128,
+        help="Center crop/pad size for XAI (keeps Grad-CAM/SHAP memory bounded).",
+    )
     p.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--out-dir", type=str, default="results")
     p.add_argument("--skip-shap", action="store_true")
@@ -22,7 +29,7 @@ def parse_args():
     return p.parse_args()
 
 
-def load_case(case_dir: Path):
+def load_case(case_dir: Path, spatial_size: int):
     stem = case_dir.name
     sample = {
         "image": [
@@ -36,6 +43,7 @@ def load_case(case_dir: Path):
         [
             LoadImaged(keys=["image"]),
             EnsureChannelFirstd(keys=["image"]),
+            ResizeWithPadOrCropd(keys=["image"], spatial_size=(spatial_size, spatial_size, spatial_size)),
             DivisiblePadd(keys=["image"], k=16),
             NormalizeIntensityd(keys="image", nonzero=True, channel_wise=True),
             EnsureTyped(keys=["image"]),
@@ -63,7 +71,7 @@ def main():
     model = create_segmentation_model(ckpt.get("model_name", "unet")).to(device)
     model.load_state_dict(ckpt["model_state_dict"])
 
-    x = load_case(Path(args.case_dir)).to(device)
+    x = load_case(Path(args.case_dir), spatial_size=args.spatial_size).to(device)
     out_dir = Path(args.out_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
 

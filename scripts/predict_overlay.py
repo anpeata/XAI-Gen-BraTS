@@ -6,6 +6,7 @@ from pathlib import Path
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
+from monai.inferers import sliding_window_inference
 from monai.transforms import Compose, DivisiblePadd, EnsureChannelFirstd, EnsureTyped, LoadImaged, NormalizeIntensityd
 
 from models.segmentation import create_segmentation_model
@@ -15,6 +16,9 @@ def parse_args():
     p = argparse.ArgumentParser(description="Generate segmentation overlay figure for one BraTS case.")
     p.add_argument("--checkpoint", type=str, default="checkpoints/best_model_cpu_long_v1.pt")
     p.add_argument("--case-dir", type=str, required=True)
+    p.add_argument("--spatial-size", type=int, default=128)
+    p.add_argument("--sw-batch-size", type=int, default=1)
+    p.add_argument("--overlap", type=float, default=0.25)
     p.add_argument("--device", type=str, default="cuda" if torch.cuda.is_available() else "cpu")
     p.add_argument("--out", type=str, required=True)
     return p.parse_args()
@@ -90,7 +94,13 @@ def main():
     image = image.to(device)
 
     with torch.no_grad():
-        logits = model(image)
+        logits = sliding_window_inference(
+            image,
+            roi_size=(args.spatial_size, args.spatial_size, args.spatial_size),
+            sw_batch_size=args.sw_batch_size,
+            predictor=model,
+            overlap=args.overlap,
+        )
         pred = torch.argmax(logits, dim=1).squeeze(0).cpu().numpy().astype(np.int16)
 
     flair = image[0, 3].detach().cpu().numpy()
