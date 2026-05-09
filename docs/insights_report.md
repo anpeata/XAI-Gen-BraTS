@@ -16,7 +16,7 @@
 | Baseline segmentation | 0.0891 | 0.0287 | 0.0155 | 0.0817 | 100.7852 | 0.0566 |
 | Baseline segmentation (CPU medium) | 0.0525 | 0.0158 | 0.1165 | 0.0250 | 94.1585 | 0.5455 |
 | SegResNet (CPU medium quick-eval) | 0.0009 | 0.0000 | 0.0000 | 0.0028 | 175.0522 | 0.3150 |
-| Baseline segmentation (CPU long v1) | 0.1240 | 0.0032 | 0.3188 | 0.0498 | 91.6189 | 0.3570 |
+| Baseline segmentation (CPU long v1) | 0.1237 | 0.0498 | 0.0374 | 0.2839 | 88.5451 | 0.3570 |
 | Baseline + uncertainty analysis | 0.0891 | 0.0287 | 0.0155 | 0.0817 | 100.7852 | 0.0566 |
 | Baseline + synthetic augmentation (label-preserving) | 0.0335 | 0.0147 | 0.0707 | 0.0150 | 121.3415 | 0.4941 |
 
@@ -50,7 +50,7 @@
 ## Conclusions
 
 - Best current setting: CPU long v1 baseline (`epochs=5`, `case-limit=64`) currently provides the strongest segmentation metrics in this repository.
-- Main failure modes: dependency/import gaps, class-index mismatch in early metric code, and full-volume shape mismatch before divisible padding.
+- Main failure modes: dependency/import gaps, class-index mismatch in early metric code, and full-volume shape/memory issues (now mitigated via sliding-window inference + streaming ECE).
 - Next three experiments: (1) complete the full 3-seed Phase 5 long A/B at tuned synthetic dose 8; (2) run longer CPU baselines (10+ epochs) with fixed random seeds; (3) run multi-seed XAI/uncertainty analysis over larger case subsets.
 - Immediate implementation recommendation: keep tuned synthetic dose 8 as the active candidate augmentation setting, but do not promote it as final until the full 3-seed long campaign confirms the trend.
 
