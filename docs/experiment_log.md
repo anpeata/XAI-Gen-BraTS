@@ -207,7 +207,6 @@ Use this file as the primary source of truth for all executed runs.
 
 ### run-027
 - Date started: 2026-05-10
-- Commit (start): 165b33a
 - Intended change: re-run the full Phase 5 long dose-8 multiseed A/B from scratch under a fresh tag for confirmation.
 - Command: `python -m scripts.run_phase5_long_dose8_campaign --tag phase5_long_dose8_20260510 --seeds 42,43,44 --dose 8 --device cpu --epochs 10 --num-workers 0 --case-limit 64 --spatial-size 96 --num-samples 1 --max-train-batches 40 --max-val-batches 10 --val-ratio 0.2 --split-seed -1 --quiet-warnings --no-progress`
 - Outputs (expected): checkpoints under `checkpoints/` plus metrics JSONs under `results/metrics/`, then summary at `results/tables/seed_ablation_phase5_long_dose8_20260510_summary.csv`.
